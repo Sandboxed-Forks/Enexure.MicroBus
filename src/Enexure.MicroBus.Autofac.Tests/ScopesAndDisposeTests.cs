@@ -7,135 +7,132 @@ using Xunit;
 
 namespace Enexure.MicroBus.Autofac.Tests
 {
-	public class ScopesAndDisposeTests
-	{
-		[UsedImplicitly]
-		private class DisposableObject : IDisposable
-		{
-			public bool IsDisposed { get; set; }
+    public class ScopesAndDisposeTests
+    {
+        [UsedImplicitly]
+        private class DisposableObject : IDisposable
+        {
+            public bool IsDisposed { get; set; }
 
-			public void Dispose()
-			{
-				IsDisposed = true;
-			}
-		}
+            public void Dispose()
+            {
+                IsDisposed = true;
+            }
+        }
 
-		class Command : ICommand { }
+        class Command : ICommand { }
 
-		[UsedImplicitly]
-		private class CommandHandler : ICommandHandler<Command>
-		{
-			private readonly DisposableObject disposable;
+        [UsedImplicitly]
+        private class CommandHandler : ICommandHandler<Command>
+        {
+            private readonly DisposableObject disposable;
 
-			public CommandHandler(DisposableObject disposable)
-			{
-				this.disposable = disposable;
-			}
+            public CommandHandler(DisposableObject disposable)
+            {
+                this.disposable = disposable;
+            }
 
-			public async Task Handle(Command command)
-			{
-				await Task.Delay(1);
+            public async Task Handle(Command command)
+            {
+                await Task.Delay(1);
 
-				disposable.IsDisposed.Should().BeFalse("");
-			}
-		}
+                disposable.IsDisposed.Should().BeFalse("");
+            }
+        }
 
-		class Event : IEvent { }
+        class Event : IEvent { }
 
-		[UsedImplicitly]
-		private class EventHandler : IEventHandler<Event>
-		{
-			private readonly DisposableObject disposable;
+        [UsedImplicitly]
+        private class EventHandler : IEventHandler<Event>
+        {
+            private readonly DisposableObject disposable;
 
-			public EventHandler(DisposableObject disposable)
-			{
-				this.disposable = disposable;
-			}
+            public EventHandler(DisposableObject disposable)
+            {
+                this.disposable = disposable;
+            }
 
-			public async Task Handle(Event Event)
-			{
-				await Task.Delay(1);
+            public async Task Handle(Event Event)
+            {
+                await Task.Delay(1);
 
-				disposable.IsDisposed.Should().BeFalse();
-			}
-		}
+                disposable.IsDisposed.Should().BeFalse();
+            }
+        }
 
-		class Query : IQuery<Query, Result> { }
+        class QueryAsync : IQuery<QueryAsync, Result> { }
 
-		private class Result : IResult { }
+        private class Result { }
 
-		[UsedImplicitly]
-		private class QueryHandler : IQueryHandler<Query, Result>
-		{
-			private readonly DisposableObject disposable;
+        [UsedImplicitly]
+        private class QueryHandler : IQueryHandler<QueryAsync, Result>
+        {
+            private readonly DisposableObject disposable;
 
-			public QueryHandler(DisposableObject disposable)
-			{
-				this.disposable = disposable;
-			}
+            public QueryHandler(DisposableObject disposable)
+            {
+                this.disposable = disposable;
+            }
 
-			public async Task<Result> Handle(Query Query)
-			{
-				await Task.Delay(1);
+            public async Task<Result> Handle(QueryAsync QueryAsync)
+            {
+                await Task.Delay(1);
 
-				disposable.IsDisposed.Should().BeFalse();
+                disposable.IsDisposed.Should().BeFalse();
 
-				return new Result();
-			}
-		}
+                return new Result();
+            }
+        }
 
-		[Fact]
-		public async Task InTheDefaultAutofacScopeCommandHandlersShouldFinishBeforeTheScopeIsDisposed()
-		{
-			var pipeline = Pipeline.EmptyPipeline;
+        [Fact]
+        public async Task InTheDefaultAutofacScopeCommandHandlersShouldFinishBeforeTheScopeIsDisposed()
+        {
+            var containerBuilder = new ContainerBuilder();
 
-			var containerBuilder = new ContainerBuilder();
+            var busBuilder = new BusBuilder()
+                .RegisterCommandHandler<Command, CommandHandler>();
 
-			containerBuilder.RegisterType<DisposableObject>().AsSelf();
+            containerBuilder.RegisterMicroBus(busBuilder);
+            containerBuilder.RegisterType<DisposableObject>().AsSelf();
+            var container = containerBuilder.Build();
 
-			var container = containerBuilder.RegisterMicroBus(busBuilder => busBuilder
-				.RegisterCommand<Command>().To<CommandHandler>(pipeline)
-			).Build();
+            var bus = container.Resolve<IMicroBus>();
 
-			var bus = container.Resolve<IMicroBus>();
+            await bus.SendAsync(new Command());
+        }
 
-			await bus.Send(new Command());
-		}
+        [Fact]
+        public async Task InTheDefaultAutofacScopeEventHandlersShouldFinishBeforeTheScopeIsDisposed()
+        {
+            var containerBuilder = new ContainerBuilder();
 
-		[Fact]
-		public async Task InTheDefaultAutofacScopeEventHandlersShouldFinishBeforeTheScopeIsDisposed()
-		{
-			var pipeline = Pipeline.EmptyPipeline;
+            var busBuilder = new BusBuilder()
+                .RegisterEventHandler<Event, EventHandler>();
 
-			var containerBuilder = new ContainerBuilder();
+            containerBuilder.RegisterMicroBus(busBuilder);
+            containerBuilder.RegisterType<DisposableObject>().AsSelf();
+            var container = containerBuilder.Build();
 
-			containerBuilder.RegisterType<DisposableObject>().AsSelf();
+            var bus = container.Resolve<IMicroBus>();
 
-			var container = containerBuilder.RegisterMicroBus(busBuilder => busBuilder
-				.RegisterEvent<Event>().To<EventHandler>(pipeline)
-			).Build();
+            await bus.PublishAsync(new Event());
+        }
 
-			var bus = container.Resolve<IMicroBus>();
+        [Fact]
+        public async Task InTheDefaultAutofacScopeQueryHandlersShouldFinishBeforeTheScopeIsDisposed()
+        {
+            var containerBuilder = new ContainerBuilder();
 
-			await bus.Publish(new Event());
-		}
+            var busBuilder = new BusBuilder()
+                .RegisterQueryHandler<QueryAsync, Result, QueryHandler>();
 
-		[Fact]
-		public async Task InTheDefaultAutofacScopeQueryHandlersShouldFinishBeforeTheScopeIsDisposed()
-		{
-			var pipeline = Pipeline.EmptyPipeline;
+            containerBuilder.RegisterMicroBus(busBuilder);
+            containerBuilder.RegisterType<DisposableObject>().AsSelf();
+            var container = containerBuilder.Build();
 
-			var containerBuilder = new ContainerBuilder();
+            var bus = container.Resolve<IMicroBus>();
 
-			containerBuilder.RegisterType<DisposableObject>().AsSelf();
-
-			var container = containerBuilder.RegisterMicroBus(busBuilder => busBuilder
-				.RegisterQuery<Query, Result>().To<QueryHandler>(pipeline)
-			).Build();
-
-			var bus = container.Resolve<IMicroBus>();
-
-			await bus.Query(new Query());
-		}
-	}
+            await bus.QueryAsync(new QueryAsync());
+        }
+    }
 }

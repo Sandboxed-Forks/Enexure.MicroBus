@@ -1,53 +1,67 @@
 ﻿using Enexure.MicroBus.Annotations;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace Enexure.MicroBus
 {
-	public class MicroBus : IMicroBus
-	{
-		private readonly IDependencyResolver dependencyResolver;
+    using System.Threading;
 
-		public MicroBus([NotNull]IDependencyResolver dependencyResolver)
-		{
-			if (dependencyResolver == null) throw new ArgumentNullException(nameof(dependencyResolver));
+    public class MicroBus : IMicroBus, ICancelableMicroBus
+    {
+        private readonly IDependencyResolver dependencyResolver;
 
-			this.dependencyResolver = dependencyResolver;
-		}
+        public MicroBus([NotNull]IDependencyResolver dependencyResolver)
+        {
+            if (dependencyResolver == null) throw new ArgumentNullException(nameof(dependencyResolver));
 
-		public async Task Send(ICommand busCommand)
-		{
-			if (busCommand == null) throw new ArgumentNullException(nameof(busCommand));
+            this.dependencyResolver = dependencyResolver;
+        }
 
-			using (var scope = dependencyResolver.BeginScope()) {
-				var builder = scope.GetService<IPipelineBuilder>();
-				var messageProcessor = builder.GetPipelineForMessage(busCommand.GetType());
-				await messageProcessor(busCommand);
-			}
-		}
+        public Task SendAsync(ICommand busCommand)
+        {
+            return RunPipelineAsync(busCommand);
+        }
 
-		public async Task Publish(IEvent busEvent)
-		{
-			if (busEvent == null) throw new ArgumentNullException(nameof(busEvent));
+        public Task PublishAsync(IEvent busEvent)
+        {
+            return RunPipelineAsync(busEvent);
+        }
 
-			using (var scope = dependencyResolver.BeginScope()) {
-				var builder = scope.GetService<IPipelineBuilder>();
-				var messageProcessor = builder.GetPipelineForMessage(busEvent.GetType());
-				await messageProcessor(busEvent);
-			}
-		}
+        public async Task<TResult> QueryAsync<TQuery, TResult>(IQuery<TQuery, TResult> busQuery)
+            where TQuery : IQuery<TQuery, TResult>
+        {
+            return (TResult)await RunPipelineAsync(busQuery);
+        }
 
-		public async Task<TResult> Query<TQuery, TResult>(IQuery<TQuery, TResult> busQuery)
-			where TQuery : IQuery<TQuery, TResult>
-			where TResult : IResult
-		{
-			if (busQuery == null) throw new ArgumentNullException(nameof(busQuery));
+        public Task SendAsync(ICommand busCommand, CancellationToken cancellation)
+        {
+            return RunPipelineAsync(busCommand, cancellation);
+        }
 
-			using (var scope = dependencyResolver.BeginScope()) {
-				var builder = scope.GetService<IPipelineBuilder>();
-				var messageProcessor = builder.GetPipelineForMessage(busQuery.GetType());
-				return (TResult) await messageProcessor(busQuery);
-			}
-		}
-	}
+        public Task PublishAsync(IEvent busEvent, CancellationToken cancellation)
+        {
+            return RunPipelineAsync(busEvent, cancellation);
+        }
+
+        public async Task<TResult> QueryAsync<TQuery, TResult>(IQuery<TQuery, TResult> busQuery, CancellationToken cancellation)
+            where TQuery : IQuery<TQuery, TResult>
+        {
+            return (TResult)await RunPipelineAsync(busQuery, cancellation);
+        }
+
+        private async Task<object> RunPipelineAsync(
+            object message,
+            CancellationToken cancellation = default(CancellationToken))
+        {
+            if (message == null) throw new ArgumentNullException(nameof(message));
+
+            using (var scope = dependencyResolver.BeginScope())
+            {
+                var builder = scope.GetService<IPipelineRunBuilder>();
+                var messageProcessor = builder.GetRunnerForPipeline(message.GetType(), cancellation);
+                return await messageProcessor.Handle(message);
+            }
+        }
+    }
 }

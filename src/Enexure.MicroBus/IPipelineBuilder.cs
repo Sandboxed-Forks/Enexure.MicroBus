@@ -1,10 +1,9 @@
 ﻿using System;
-using System.Threading.Tasks;
 
 namespace Enexure.MicroBus
 {
-	public interface IPipelineBuilder
-	{
-		Func<IMessage, Task<object>> GetPipelineForMessage(Type messageType);
-	}
+    public interface IPipelineBuilder
+    {
+        Pipeline GetPipeline(Type messageType);
+    }
 }

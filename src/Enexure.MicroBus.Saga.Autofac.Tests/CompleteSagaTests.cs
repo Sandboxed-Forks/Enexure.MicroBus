@@ -4,80 +4,81 @@ using Enexure.MicroBus.Sagas;
 using Xunit;
 using System;
 using System.Threading.Tasks;
-using Enexure.MicroBus.Sagas.Autofac;
 using FluentAssertions;
 
-namespace Enexure.MicroBus.Saga.Tests
+namespace Enexure.MicroBus.Saga.Autofac.Tests
 {
-	public class SagaTests
-	{
-		private readonly Guid id = Guid.NewGuid();
+    public class SagaTests
+    {
+        private readonly Guid id = Guid.NewGuid();
 
-		[Fact]
-		public async Task StartingASaga()
-		{
-			var builder = new ContainerBuilder();
+        [Fact]
+        public async Task StartingASaga()
+        {
+            var builder = new ContainerBuilder();
 
-			var container = builder
-				.RegisterSagas()
-				.RegisterMicroBus(busBuilder => busBuilder.RegisterSaga<TestSaga>(new FinderList()
-					.AddSagaFinder<FinderA>()
-					.AddSagaFinder<FinderB>()
-					.AddSagaFinder<FinderC>()
-				))
-				.Build();
+            builder.RegisterType<TestSagaRepository>().AsImplementedInterfaces().SingleInstance();
 
-			var bus = container.Resolve<IMicroBus>();
+            var busBuilder = new BusBuilder()
+                .RegisterSaga<TestSaga>();
 
-			await bus.Publish(new SagaStartingAEvent() { Identifier = id });
+            var container = builder
+                .RegisterMicroBus(busBuilder)
+                .Build();
 
-			await bus.Publish(new SagaEndingEvent() { Identifier = id });
+            var bus = container.Resolve<IMicroBus>();
 
-		}
+            await bus.PublishAsync(new SagaStartingAEvent() { CorrelationId = id });
 
-		[Fact]
-		public async Task SagaWithTwoStarters()
-		{
-			var builder = new ContainerBuilder();
+            await bus.PublishAsync(new SagaEndingEvent() { CorrelationId = id });
 
-			var container = builder
-				.RegisterSagas()
-				.RegisterMicroBus(busBuilder => busBuilder.RegisterSaga<TestSaga>())
-				.RegisterSagaFinder<FinderA>()
-				.RegisterSagaFinder<FinderB>()
-				.RegisterSagaFinder<FinderC>()
-				.Build();
+        }
 
-			var bus = container.Resolve<IMicroBus>();
+        [Fact]
+        public async Task SagaWithTwoStarters()
+        {
+            var builder = new ContainerBuilder();
 
-			await bus.Publish(new SagaStartingBEvent() { Identifier = id });
+            builder.RegisterType<TestSagaRepository>().AsImplementedInterfaces().SingleInstance();
 
-			await bus.Publish(new SagaStartingAEvent() { Identifier = id });
+            var busBuilder = new BusBuilder()
+                .RegisterSaga<TestSaga>();
 
-			await bus.Publish(new SagaEndingEvent() { Identifier = id });
+            var container = builder
+                .RegisterMicroBus(busBuilder)
+                .Build();
 
-		}
+            var bus = container.Resolve<IMicroBus>();
 
-		[Fact]
-		public void SagaHandlingAMessageBeforeItsBeenStarted()
-		{
-			var builder = new ContainerBuilder();
+            await bus.PublishAsync(new SagaStartingBEvent() { CorrelationId = id });
 
-			var container = builder
-				.RegisterSagas()
-				.RegisterMicroBus(busBuilder => busBuilder.RegisterSaga<TestSaga>())
-				.RegisterSagaFinder<FinderA>()
-				.RegisterSagaFinder<FinderB>()
-				.RegisterSagaFinder<FinderC>()
-				.Build();
+            await bus.PublishAsync(new SagaStartingAEvent() { CorrelationId = id });
 
-			var bus = container.Resolve<IMicroBus>();
+            await bus.PublishAsync(new SagaEndingEvent() { CorrelationId = id });
 
-			Func<Task> func = () => bus.Publish(new SagaEndingEvent() { Identifier = id });
+        }
 
-			func.ShouldThrowExactly<NoSagaFoundException>();
+        [Fact]
+        public void SagaHandlingAMessageBeforeItsBeenStarted()
+        {
+            var builder = new ContainerBuilder();
 
-		}
+            builder.RegisterType<TestSagaRepository>().AsImplementedInterfaces().SingleInstance();
 
-	}
+            var busBuilder = new BusBuilder()
+                .RegisterSaga<TestSaga>();
+
+            var container = builder
+                .RegisterMicroBus(busBuilder)
+                .Build();
+
+            var bus = container.Resolve<IMicroBus>();
+
+            Func<Task> func = () => bus.PublishAsync(new SagaEndingEvent() { CorrelationId = id });
+
+            func.ShouldThrowExactly<NoSagaFoundException>();
+
+        }
+
+    }
 }

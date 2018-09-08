@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Autofac;
 using Enexure.MicroBus.Annotations;
@@ -7,43 +10,57 @@ using Xunit;
 
 namespace Enexure.MicroBus.Autofac.Tests
 {
-	public class AutofacCommandTests
-	{
-		class Command : ICommand { }
+    public class AutofacCommandTests
+    {
+        class Command : ICommand { }
 
-		[UsedImplicitly]
-		class CommandHandler : ICommandHandler<Command>
-		{
-			public Task Handle(Command command)
-			{
-				return Task.FromResult(0);
-			}
-		}
+        [UsedImplicitly]
+        class CommandHandler : ICommandHandler<Command>
+        {
+            public Task Handle(Command command)
+            {
+                return Task.CompletedTask;
+            }
+        }
 
-		[Fact]
-		public async Task TestCommand()
-		{
-			var container = new ContainerBuilder().RegisterMicroBus(busBuilder => {
+        [Fact]
+        public async Task TestCommandWithAutoRegister()
+        {
+            var handlerTypes =
+                new[] {typeof(CommandHandler)}
+                    .Select(x => x.GetTypeInfo());
 
-				return busBuilder
-					.RegisterCommand<Command>().To<CommandHandler>();
+            var busBuilder = new BusBuilder()
+                .RegisterHandlers(handlerTypes);
 
-			}).Build();
+            var container = new ContainerBuilder().RegisterMicroBus(busBuilder).Build();
 
-			var bus = container.Resolve<IMicroBus>();
-			await bus.Send(new Command());
-		}
+            var bus = container.Resolve<IMicroBus>();
+            await bus.SendAsync(new Command());
+        }
 
-		[Fact]
-		public void TestMissingCommand()
-		{
-			var container = new ContainerBuilder().RegisterMicroBus(busBuilder => busBuilder).Build();
+        [Fact]
+        public async Task TestCommand()
+        {
+            var busBuilder = new BusBuilder()
+                .RegisterCommandHandler<Command, CommandHandler>();
 
-			var bus = container.Resolve<IMicroBus>();
+            var container = new ContainerBuilder().RegisterMicroBus(busBuilder).Build();
 
-			new Func<Task>(() => bus.Send(new Command()))
-				.ShouldThrow<NoRegistrationForMessageException>();
+            var bus = container.Resolve<IMicroBus>();
+            await bus.SendAsync(new Command());
+        }
 
-		}
-	}
+        [Fact]
+        public void TestMissingCommand()
+        {
+            var container = new ContainerBuilder().RegisterMicroBus(new BusBuilder()).Build();
+
+            var bus = container.Resolve<IMicroBus>();
+
+            new Func<Task>(() => bus.SendAsync(new Command()))
+                .ShouldThrow<NoRegistrationForMessageException>();
+
+        }
+    }
 }

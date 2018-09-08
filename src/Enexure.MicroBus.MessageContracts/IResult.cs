@@ -1,6 +1,9 @@
-﻿namespace Enexure.MicroBus
+﻿using System;
+
+namespace Enexure.MicroBus
 {
-	public interface IResult
-	{
-	}
+    [Obsolete]
+    public interface IResult
+    {
+    }
 }

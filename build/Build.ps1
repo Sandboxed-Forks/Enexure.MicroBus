@@ -7,59 +7,54 @@ properties {
 	$solutionDir = Resolve-Path "$PSScriptRoot\.."
 	$solutionFile = "$solutionDir\$solutionName.sln"
 	$nuget = "$PSScriptRoot\nuget.exe"
-	$nunit = "$PSScriptRoot\nunit\nunit-console.exe"
 }
 
-task default -depends Package, Test
+task default -depends Fail 
+
+task Fail {
+	throw "Try calling Test or Package"
+}
 
 task Compile { 
-
-	dnvm use 1.0.0-rc1-update1 -r clr
 
 	Write-Host "Compiling"
 	Write-Host "|-----------------------------------------"
 
-	Write-Host "Running dnu restore" -F Cyan
-	dnu restore $solutionDir
-
-	$projects = ls "$solutionDir\src"
+	$projects = ls "$solutionDir\src\**\*.csproj"
 
 	foreach($project in $projects) {
 
 		Write-Host "Building $($project.FullName)" -F Cyan
-		exec { dnu build $project.FullName --configuration $configuration }
+		exec { dotnet build $project.FullName --configuration $configuration }
 	}
 }
 
 task Test { 
 
-	dnvm use 1.0.0-rc1-final -r coreclr
-
 	Write-Host "Testing"
 	Write-Host "|-----------------------------------------"
 
-	$projects = ls "$solutionDir\src" | ? { $_.Name -like "*Tests" }
+	$projects = ls "$solutionDir\src\**\*.csproj" | ? { $_.Name -like "*Tests*" }
 
 	foreach($project in $projects) {
 
 		Write-Host "Running tests for $project" -F Cyan
-		dnx -p "$($project.FullName)" test
+		Write-Host "dotnet test '$($project.FullName)'" -F Cyan
+		exec { dotnet test "$($project.FullName)" }
 
 	}
 }
 
 task Package -depends Compile { 
 
-	dnvm use 1.0.0-rc1-update1 -r clr
-
 	Write-Host "Packaging"
 
-	$projects = ls "$solutionDir\src" | ? { -not ($_.Name -like "*Tests") }
+	$projects = ls "$solutionDir\src\**\*.csproj" | ? { -not ($_.Name -like "*Tests*") }
 
 	foreach($project in $projects) {
 
 	Write-Host "Packing $project" -F Cyan
-		dnu pack $project.FullName --configuration $configuration
+		exec { dotnet pack $project.FullName --configuration $configuration }
 	}
 }
 

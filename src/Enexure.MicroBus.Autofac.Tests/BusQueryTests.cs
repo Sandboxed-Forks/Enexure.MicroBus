@@ -5,36 +5,36 @@ using Xunit;
 
 namespace Enexure.MicroBus.Autofac.Tests
 {
-	public class AutofacQueryTests
-	{
-		class Query : IQuery<Query, Result> { }
+    public class AutofacQueryTests
+    {
+        class QueryAsync : IQuery<QueryAsync, Result> { }
 
-		class Result : IResult { }
+        class Result { }
 
-		class QueryHandler : IQueryHandler<Query, Result>
-		{
-			public Task<Result> Handle(Query query)
-			{
-				return Task.FromResult(new Result());
-			}
-		}
+        class QueryHandler : IQueryHandler<QueryAsync, Result>
+        {
+            public Task<Result> Handle(QueryAsync query)
+            {
+                return Task.FromResult(new Result());
+            }
+        }
 
-		[Fact]
-		public async Task TestQuery()
-		{
-			var container = new ContainerBuilder().RegisterMicroBus(busBuilder => {
+        [Fact]
+        public async Task TestQuery()
+        {
+            var busBuilder = new BusBuilder()
+                .RegisterQueryHandler<QueryAsync, Result, QueryHandler>();
 
-				return busBuilder
-					.RegisterQuery<Query, Result>().To<QueryHandler>();
+            var container = new ContainerBuilder()
+                .RegisterMicroBus(busBuilder)
+                .Build();
 
-			}).Build();
+            var bus = container.Resolve<IMicroBus>();
 
-			var bus = container.Resolve<IMicroBus>();
+            var result = await bus.QueryAsync(new QueryAsync());
 
-			var result = await bus.Query(new Query());
+            result.Should().NotBeNull();
 
-			result.Should().NotBeNull();
-
-		}
-	}
+        }
+    }
 }

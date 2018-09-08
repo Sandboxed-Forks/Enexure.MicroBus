@@ -1,17 +1,17 @@
 ﻿namespace Enexure.MicroBus.Messages
 {
-	public class NoMatchingRegistrationEvent : IEvent
-	{
-		private readonly IMessage message;
+    public class NoMatchingRegistrationEvent : IEvent
+    {
+        private readonly object message;
 
-		public NoMatchingRegistrationEvent(IMessage message)
-		{
-			this.message = message;
-		}
+        public NoMatchingRegistrationEvent(object message)
+        {
+            this.message = message;
+        }
 
-		public IMessage Message
-		{
-			get { return message; }
-		}
-	}
+        public object Message
+        {
+            get { return message; }
+        }
+    }
 }

@@ -3,10 +3,17 @@ using System.Threading.Tasks;
 
 namespace Enexure.MicroBus
 {
-	public interface IQueryHandler<in TQuery, TResult>
-		where TQuery : IQuery<TQuery, TResult>
-		where TResult : IResult
-	{
-		Task<TResult> Handle(TQuery query);
-	}
+    using System.Threading;
+
+    public interface IQueryHandler<in TQuery, TResult>
+        where TQuery : IQuery<TQuery, TResult>
+    {
+        Task<TResult> Handle(TQuery query);
+    }
+
+    public interface ICancelableQueryHandler<in TQuery, TResult>
+        where TQuery : IQuery<TQuery, TResult>
+    {
+        Task<TResult> Handle(TQuery query, CancellationToken cancellation);
+    }
 }

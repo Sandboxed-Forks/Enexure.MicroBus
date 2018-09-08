@@ -1,91 +1,56 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System.Linq;
 using Autofac;
 
 namespace Enexure.MicroBus.Autofac
 {
-	public static class ContainerExtensions
-	{
-		public static ContainerBuilder RegisterMicroBus(this ContainerBuilder containerBuilder, Func<IHandlerRegister, IHandlerRegister> registerHandlers)
-		{
-			return RegisterMicroBus(containerBuilder, registerHandlers, Pipeline.EmptyPipeline, new BusSettings());
-		}
+    public static class ContainerExtensions
+    {
+        public static ContainerBuilder RegisterMicroBus(this ContainerBuilder containerBuilder, BusBuilder busBuilder)
+        {
+            return RegisterMicroBus(containerBuilder, busBuilder, new BusSettings());
+        }
 
-		public static ContainerBuilder RegisterMicroBus(this ContainerBuilder containerBuilder, Func<IHandlerRegister, IHandlerRegister> registerHandler, Pipeline globalPipeline)
-		{
-			return RegisterMicroBus(containerBuilder, registerHandler, globalPipeline, new BusSettings());
-		}
+        public static ContainerBuilder RegisterMicroBus(this ContainerBuilder containerBuilder, BusBuilder busBuilder, BusSettings busSettings)
+        {
+            containerBuilder.RegisterInstance(busSettings).AsSelf().SingleInstance();
 
-		public static ContainerBuilder RegisterMicroBus(this ContainerBuilder containerBuilder, Func<IHandlerRegister, IHandlerRegister> registerHandlers, BusSettings busSettings)
-		{
-			return RegisterMicroBus(containerBuilder, registerHandlers, Pipeline.EmptyPipeline, busSettings);
-		}
+            var pipelineBuilder = new PipelineBuilder(busBuilder);
+            pipelineBuilder.Validate();
+            RegisterHandlersWithAutofac(containerBuilder, busBuilder);
 
-		public static ContainerBuilder RegisterMicroBus(this ContainerBuilder containerBuilder, Func<IHandlerRegister, IHandlerRegister> registerHandlers, Pipeline globalPipeline, BusSettings busSettings)
-		{
-			containerBuilder.RegisterInstance(busSettings).AsSelf();
+            containerBuilder.RegisterInstance(pipelineBuilder).AsImplementedInterfaces().SingleInstance();
+            containerBuilder.RegisterType<OuterPipelineDetector>().AsImplementedInterfaces().InstancePerLifetimeScope();
+            containerBuilder.RegisterType<PipelineRunBuilder>().AsImplementedInterfaces();
+            containerBuilder.RegisterType<AutofacDependencyScope>().AsImplementedInterfaces();
 
-			var register = registerHandlers(new HandlerRegister());
-			var registrations = register.GetMessageRegistrations();
-			RegisterHandlersWithAutofac(containerBuilder, registrations);
-			var handlerProvider = HandlerProvider.Create(registrations);
-			containerBuilder.RegisterInstance(handlerProvider).As<IHandlerProvider>().SingleInstance();
+            containerBuilder.RegisterType<MicroBus>().AsImplementedInterfaces();
+            containerBuilder.RegisterType<MicroMediator>().AsImplementedInterfaces();
 
-			RegisterPipelineHandlers(containerBuilder, globalPipeline);
-			containerBuilder.RegisterInstance(new GlobalPipelineProvider(globalPipeline)).As<IGlobalPipelineProvider>().SingleInstance();
+            return containerBuilder;
+        }
 
-			containerBuilder.RegisterType<PipelineBuilder>().As<IPipelineBuilder>();
-			containerBuilder.RegisterType<AutofacDependencyResolver>().As<IDependencyResolver>();
-			containerBuilder.RegisterType<AutofacDependencyScope>().As<IDependencyScope>();
-			containerBuilder.RegisterType<GlobalPipelineTracker>().As<IGlobalPipelineTracker>().InstancePerLifetimeScope();
-			containerBuilder.RegisterType<MicroBus>().As<IMicroBus>();
+        private static void RegisterHandlersWithAutofac(ContainerBuilder containerBuilder, BusBuilder busBuilder)
+        {
+            foreach (var globalHandlerRegistration in busBuilder.GlobalHandlerRegistrations)
+            {
+                containerBuilder.RegisterType(globalHandlerRegistration.HandlerType).AsSelf();
 
-			return containerBuilder;
-		}
+                foreach (var dependency in globalHandlerRegistration.Dependencies)
+                {
+                    containerBuilder.RegisterType(dependency).AsSelf();
+                }
+            }
 
-		public static void RegisterHandlersWithAutofac(ContainerBuilder containerBuilder, IReadOnlyCollection<MessageRegistration> registrations)
-		{
-			var handlers = registrations.Select(x => x.Handler).Distinct();
-			var piplelineHandlers = registrations.Select(x => x.Pipeline).Distinct().SelectMany(x => x).Distinct();
+            foreach (var registration in busBuilder.MessageHandlerRegistrations)
+            {
+                containerBuilder.RegisterType(registration.HandlerType).AsSelf();
 
-			RegisterLeafHandlers(containerBuilder, handlers);
-			RegisterPipelineHandlers(containerBuilder, piplelineHandlers);
+                foreach (var dependency in registration.Dependencies)
+                {
+                    containerBuilder.RegisterType(dependency).AsSelf().AsImplementedInterfaces();
+                }
+            }
+        }
 
-			foreach (var registration in registrations)
-			{
-				if (registration.Dependancies.Any())
-				{
-					foreach (var dependancy in registration.Dependancies)
-					{
-						containerBuilder.RegisterType(dependancy).AsSelf();
-					}
-				}
-
-				if (registration.ScopedDependancies.Any())
-				{
-					foreach (var dependancy in registration.ScopedDependancies)
-					{
-						containerBuilder.RegisterType(dependancy).AsSelf().AsImplementedInterfaces().InstancePerLifetimeScope();
-					}
-				}
-			}
-		}
-
-		private static void RegisterLeafHandlers(ContainerBuilder containerBuilder, IEnumerable<Type> handlers)
-		{
-			foreach (var handlerType in handlers)
-			{
-				containerBuilder.RegisterType(handlerType).AsSelf().InstancePerLifetimeScope();
-			}
-		}
-
-		private static void RegisterPipelineHandlers(ContainerBuilder containerBuilder, IEnumerable<Type> piplelineHandlers)
-		{
-			foreach (var piplelineHandler in piplelineHandlers)
-			{
-				containerBuilder.RegisterType(piplelineHandler).AsSelf().AsImplementedInterfaces().InstancePerLifetimeScope();
-			}
-		}
-	}
+    }
 }
